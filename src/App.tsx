@@ -29,24 +29,35 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Simple AI API call - uses Pollinations GET endpoint (most reliable, no keys)
+// Simple AI API call - uses Pollinations POST endpoint (OpenAI-compatible)
 async function getAIResponse(prompt: string, model: string = 'openai'): Promise<string> {
-  const encodedPrompt = encodeURIComponent(prompt);
-  // Add random seed and timestamp to prevent caching
-  const seed = Math.floor(Math.random() * 1000000);
-  const timestamp = Date.now();
-  const url = `https://text.pollinations.ai/${encodedPrompt}?model=${model}&seed=${seed}&t=${timestamp}`;
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
   
-  const response = await fetch(url, {
-    cache: 'no-store',
+  const response = await fetch('https://text.pollinations.ai/', {
+    method: 'POST',
     headers: {
+      'Content-Type': 'application/json',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-    }
+    },
+    cache: 'no-store',
+    body: JSON.stringify({
+      messages: [
+        {
+          role: 'system',
+          content: `You are Neo AI, a helpful assistant. Current time: ${new Date().toISOString()}. Request ID: ${uniqueId}. Answer questions directly and accurately.`
+        },
+        {
+          role: 'user',
+          content: `${prompt} [Request: ${uniqueId}]`
+        }
+      ],
+      model: model,
+      seed: Math.floor(Math.random() * 999999)
+    })
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to get response: ${response.status}`);
+    throw new Error(`API error: ${response.status}`);
   }
   
   const text = await response.text();
@@ -540,7 +551,7 @@ export default function App() {
           
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <span className="text-sm text-white/60">Neo AI • Online</span>
+            <span className="text-sm text-white/60">Neo AI v3 • Live</span>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -620,7 +631,7 @@ export default function App() {
               </button>
             </div>
             <p className="text-[10px] text-white/20 text-center mt-2">
-              Neo AI — Free & unlimited • No API keys required
+              Neo AI v3.0 — Free & unlimited • No API keys required • Build: {Date.now()}
             </p>
           </div>
         </div>
