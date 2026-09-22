@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface Message {
   id: string;
@@ -14,15 +14,11 @@ interface Conversation {
   createdAt: Date;
 }
 
-const SYSTEM_PROMPT = `You are Neo AI, a highly intelligent, helpful, and friendly AI assistant. You provide clear, accurate, and well-structured responses. Use markdown formatting when helpful (bold with **, lists with - or numbers, code with backticks). Be knowledgeable about any topic. Keep responses concise but thorough.`;
-
 const MODELS = [
-  { id: 'gpt-5-nano', name: 'GPT-5 Nano', desc: 'Fast & Efficient' },
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', desc: 'Balanced' },
-  { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', desc: 'Advanced Reasoning' },
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash', desc: 'Google AI' },
-  { id: 'deepseek-chat', name: 'DeepSeek V3', desc: 'Open Source' },
-  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', desc: 'Meta AI' },
+  { id: 'openai', name: 'GPT-4o', desc: 'OpenAI' },
+  { id: 'openai-large', name: 'GPT-4o Large', desc: 'Better Quality' },
+  { id: 'claude', name: 'Claude', desc: 'Anthropic' },
+  { id: 'mistral', name: 'Mistral', desc: 'Fast' },
 ];
 
 function generateId(): string {
@@ -33,76 +29,33 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-declare global {
-  interface Window {
-    puter: any;
-  }
-}
-
-// Free AI API call using Pollinations (no key needed)
-async function callPollinationsAI(messages: { role: string; content: string }[], model: string): Promise<string> {
-  const response = await fetch('https://text.pollinations.ai/openai', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: model || 'openai',
-      messages: messages,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';
-}
-
-// Streaming via Pollinations
-async function* streamPollinationsAI(messages: { role: string; content: string }[], model: string): AsyncGenerator<string> {
-  const response = await fetch('https://text.pollinations.ai/openai', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: model || 'openai',
-      messages: messages,
-      stream: true,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response stream');
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') return;
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) yield content;
-        } catch {
-          // skip malformed
-        }
-      }
+// Simple AI API call - uses Pollinations GET endpoint (most reliable, no keys)
+async function getAIResponse(prompt: string, model: string = 'openai'): Promise<string> {
+  const encodedPrompt = encodeURIComponent(prompt);
+  // Add random seed and timestamp to prevent caching
+  const seed = Math.floor(Math.random() * 1000000);
+  const timestamp = Date.now();
+  const url = `https://text.pollinations.ai/${encodedPrompt}?model=${model}&seed=${seed}&t=${timestamp}`;
+  
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
     }
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get response: ${response.status}`);
   }
+  
+  const text = await response.text();
+  
+  if (!text || text.length < 2) {
+    throw new Error('Empty response received');
+  }
+  
+  return text.trim();
 }
 
 // Sidebar Component
@@ -142,7 +95,6 @@ function Sidebar({
         flex flex-col transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        {/* Logo */}
         <div className="p-5 border-b border-white/5">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden neo-glow ring-1 ring-purple-500/30">
@@ -159,7 +111,6 @@ function Sidebar({
           </div>
         </div>
 
-        {/* New Chat Button */}
         <div className="p-4">
           <button
             onClick={onNewChat}
@@ -175,7 +126,6 @@ function Sidebar({
           </button>
         </div>
 
-        {/* Conversations List */}
         <div className="flex-1 overflow-y-auto px-3 pb-4">
           <p className="text-[10px] text-white/30 uppercase tracking-widest px-2 mb-2">Recent</p>
           {conversations.length === 0 ? (
@@ -197,7 +147,6 @@ function Sidebar({
           )}
         </div>
 
-        {/* Bottom Section - Model Selector */}
         <div className="p-4 border-t border-white/5">
           <button
             onClick={onOpenModelSelect}
@@ -326,119 +275,25 @@ function TypingIndicator() {
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
 
-  const renderInline = (text: string) => {
-    const result: React.ReactNode[] = [];
-    let keyCounter = 0;
-    const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    
-    while ((match = pattern.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        result.push(<span key={keyCounter++}>{text.slice(lastIndex, match.index)}</span>);
-      }
-      
-      const fullMatch = match[0];
-      if (fullMatch.startsWith('`')) {
-        result.push(<code key={keyCounter++} className="bg-white/10 px-1.5 py-0.5 rounded text-purple-300 text-[13px] font-mono">{fullMatch.slice(1, -1)}</code>);
-      } else if (fullMatch.startsWith('**')) {
-        result.push(<strong key={keyCounter++} className="text-white font-semibold">{fullMatch.slice(2, -2)}</strong>);
-      } else if (fullMatch.startsWith('*')) {
-        result.push(<em key={keyCounter++} className="text-white/80 italic">{fullMatch.slice(1, -1)}</em>);
-      }
-      
-      lastIndex = match.index + fullMatch.length;
-    }
-    
-    if (lastIndex < text.length) {
-      result.push(<span key={keyCounter++}>{text.slice(lastIndex)}</span>);
-    }
-    
-    return result.length > 0 ? result : <span>{text}</span>;
-  };
-
   const renderContent = (content: string) => {
-    const lines = content.split('\n');
-    const elements: React.ReactNode[] = [];
-    let i = 0;
-    
-    while (i < lines.length) {
-      const line = lines[i];
-      
-      // Code blocks
-      if (line.startsWith('```')) {
-        const lang = line.slice(3).trim();
-        const codeLines: string[] = [];
-        i++;
-        while (i < lines.length && !lines[i].startsWith('```')) {
-          codeLines.push(lines[i]);
-          i++;
-        }
-        i++;
-        elements.push(
-          <div key={elements.length} className="my-3 rounded-xl overflow-hidden border border-white/10">
-            {lang && (
-              <div className="px-3 py-1.5 bg-white/5 border-b border-white/5 text-[10px] text-white/40 uppercase tracking-wider">
-                {lang}
-              </div>
-            )}
-            <pre className="p-3 bg-white/[0.03] overflow-x-auto">
-              <code className="text-[13px] text-white/80 font-mono leading-relaxed">
-                {codeLines.join('\n')}
-              </code>
-            </pre>
-          </div>
+    return content.split('\n').map((line, i) => {
+      // Bold
+      if (line.includes('**')) {
+        const parts = line.split('**');
+        return (
+          <span key={i}>
+            {parts.map((part, j) => j % 2 === 1 ? <strong key={j}>{part}</strong> : part)}
+            {i < content.split('\n').length - 1 && <br />}
+          </span>
         );
-        continue;
       }
-      
-      if (line.startsWith('### ')) {
-        elements.push(<h3 key={i} className="text-base font-bold text-white mt-3 mb-1">{renderInline(line.slice(4))}</h3>);
-        i++; continue;
-      }
-      if (line.startsWith('## ')) {
-        elements.push(<h2 key={i} className="text-lg font-bold text-white mt-3 mb-1">{renderInline(line.slice(3))}</h2>);
-        i++; continue;
-      }
-      if (line.startsWith('# ')) {
-        elements.push(<h1 key={i} className="text-xl font-bold text-white mt-3 mb-1">{renderInline(line.slice(2))}</h1>);
-        i++; continue;
-      }
-
-      if (line.match(/^[\s]*[-•*]\s/)) {
-        const indent = line.match(/^(\s*)/)?.[1].length || 0;
-        const text = line.replace(/^[\s]*[-•*]\s/, '');
-        elements.push(
-          <div key={i} className="flex items-start gap-2 ml-2" style={{ paddingLeft: `${indent * 8}px` }}>
-            <span className="text-purple-400 mt-0.5">•</span>
-            <span>{renderInline(text)}</span>
-          </div>
-        );
-        i++; continue;
-      }
-
-      if (line.match(/^[\s]*\d+\.\s/)) {
-        const num = line.match(/^[\s]*(\d+)\./)?.[1];
-        const text = line.replace(/^[\s]*\d+\.\s/, '');
-        elements.push(
-          <div key={i} className="flex items-start gap-2 ml-2">
-            <span className="text-purple-400 font-medium min-w-[16px]">{num}.</span>
-            <span>{renderInline(text)}</span>
-          </div>
-        );
-        i++; continue;
-      }
-
-      if (line.trim() === '') {
-        elements.push(<br key={i} />);
-        i++; continue;
-      }
-
-      elements.push(<span key={i}>{renderInline(line)}{i < lines.length - 1 && <br />}</span>);
-      i++;
-    }
-    
-    return elements;
+      return (
+        <span key={i}>
+          {line}
+          {i < content.split('\n').length - 1 && <br />}
+        </span>
+      );
+    });
   };
 
   return (
@@ -478,10 +333,10 @@ function MessageBubble({ message }: { message: Message }) {
 // Welcome Screen
 function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string) => void }) {
   const suggestions = [
-    { icon: "💡", text: "Explain quantum computing simply" },
-    { icon: "💻", text: "Write a Python function to find primes" },
-    { icon: "🎨", text: "Help me write a creative story" },
-    { icon: "🧠", text: "What are the latest AI advances?" },
+    { icon: "💡", text: "Explain quantum computing" },
+    { icon: "💻", text: "Write a Python function" },
+    { icon: "🎨", text: "Help me write a story" },
+    { icon: "🧠", text: "What is AI?" },
   ];
 
   return (
@@ -523,7 +378,7 @@ export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('openai');
@@ -531,13 +386,19 @@ export default function App() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const abortRef = useRef(false);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
+  // Clear old localStorage data on load
+  useEffect(() => {
+    localStorage.removeItem('neo-conversations');
+    localStorage.removeItem('neo-api-key');
+    localStorage.removeItem('neo-model');
+  }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConversation?.messages, isStreaming]);
+  }, [activeConversation?.messages]);
 
   const createNewChat = () => {
     const newConv: Conversation = {
@@ -553,9 +414,9 @@ export default function App() {
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-  const sendMessage = useCallback(async (overrideText?: string) => {
+  const sendMessage = async (overrideText?: string) => {
     const text = overrideText || inputValue;
-    if (!text.trim() || isStreaming) return;
+    if (!text.trim() || isLoading) return;
 
     let currentConvId = activeConversationId;
 
@@ -578,10 +439,6 @@ export default function App() {
       timestamp: new Date(),
     };
 
-    // Get current messages before update
-    const currentConv = conversations.find(c => c.id === currentConvId);
-    const previousMessages = currentConv?.messages || [];
-
     setConversations(prev => prev.map(conv => {
       if (conv.id === currentConvId) {
         const isFirstMessage = conv.messages.length === 0;
@@ -595,145 +452,53 @@ export default function App() {
     }));
 
     setInputValue('');
-    setIsStreaming(true);
+    setIsLoading(true);
     setError(null);
-    abortRef.current = false;
-
-    // Build API messages
-    const apiMessages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...previousMessages.map(m => ({ role: m.role, content: m.content })),
-      { role: 'user', content: text.trim() },
-    ];
-
-    // Add empty AI message for streaming display
-    const aiMessageId = generateId();
-    const aiMessage: Message = {
-      id: aiMessageId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-    };
-
-    setConversations(prev => prev.map(conv => {
-      if (conv.id === currentConvId) {
-        return { ...conv, messages: [...conv.messages, aiMessage] };
-      }
-      return conv;
-    }));
 
     try {
-      // Try Puter.js first, fall back to Pollinations
-      let fullContent = '';
-      let usedPuter = false;
+      // Call AI API
+      const response = await getAIResponse(text.trim(), selectedModel);
 
-      if (window.puter && window.puter.ai && window.puter.ai.chat) {
-        try {
-          usedPuter = true;
-          const response = await window.puter.ai.chat(apiMessages, { 
-            model: selectedModel, 
-            stream: true 
-          });
+      const aiMessage: Message = {
+        id: generateId(),
+        role: 'assistant',
+        content: response,
+        timestamp: new Date(),
+      };
 
-          for await (const part of response) {
-            if (abortRef.current) break;
-            if (part?.text) {
-              fullContent += part.text;
-              setConversations(prev => prev.map(conv => {
-                if (conv.id === currentConvId) {
-                  const messages = [...conv.messages];
-                  const lastMsg = messages[messages.length - 1];
-                  if (lastMsg && lastMsg.id === aiMessageId) {
-                    messages[messages.length - 1] = { ...lastMsg, content: fullContent };
-                  }
-                  return { ...conv, messages };
-                }
-                return conv;
-              }));
-            }
-          }
-        } catch (puterErr) {
-          console.warn('Puter.js failed, trying Pollinations...', puterErr);
-          usedPuter = false;
-          fullContent = '';
-        }
-      }
-
-      // Fallback to Pollinations streaming
-      if (!usedPuter || !fullContent) {
-        fullContent = '';
-        try {
-          const stream = streamPollinationsAI(apiMessages, selectedModel);
-          for await (const chunk of stream) {
-            if (abortRef.current) break;
-            fullContent += chunk;
-            setConversations(prev => prev.map(conv => {
-              if (conv.id === currentConvId) {
-                const messages = [...conv.messages];
-                const lastMsg = messages[messages.length - 1];
-                if (lastMsg && lastMsg.id === aiMessageId) {
-                  messages[messages.length - 1] = { ...lastMsg, content: fullContent };
-                }
-                return { ...conv, messages };
-              }
-              return conv;
-            }));
-          }
-        } catch (pollErr) {
-          // Final fallback: non-streaming
-          const response = await callPollinationsAI(apiMessages, selectedModel);
-          fullContent = response;
-          setConversations(prev => prev.map(conv => {
-            if (conv.id === currentConvId) {
-              const messages = [...conv.messages];
-              const lastMsg = messages[messages.length - 1];
-              if (lastMsg && lastMsg.id === aiMessageId) {
-                messages[messages.length - 1] = { ...lastMsg, content: fullContent };
-              }
-              return { ...conv, messages };
-            }
-            return conv;
-          }));
-        }
-      }
-
-      if (!fullContent) {
-        throw new Error('No response received');
-      }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      setError(errorMessage);
-      
       setConversations(prev => prev.map(conv => {
         if (conv.id === currentConvId) {
-          const messages = [...conv.messages];
-          const lastMsg = messages[messages.length - 1];
-          if (lastMsg && lastMsg.id === aiMessageId) {
-            messages[messages.length - 1] = { 
-              ...lastMsg, 
-              content: `⚠️ ${errorMessage}` 
-            };
-          }
-          return { ...conv, messages };
+          return { ...conv, messages: [...conv.messages, aiMessage] };
+        }
+        return conv;
+      }));
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to get response. Please try again.';
+      setError(errorMessage);
+      
+      const errorMsg: Message = {
+        id: generateId(),
+        role: 'assistant',
+        content: `⚠️ ${errorMessage}`,
+        timestamp: new Date(),
+      };
+
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === currentConvId) {
+          return { ...conv, messages: [...conv.messages, errorMsg] };
         }
         return conv;
       }));
     } finally {
-      setIsStreaming(false);
-      abortRef.current = false;
+      setIsLoading(false);
     }
-  }, [inputValue, isStreaming, activeConversationId, conversations, selectedModel]);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
-  };
-
-  const stopGenerating = () => {
-    abortRef.current = true;
-    setIsStreaming(false);
   };
 
   return (
@@ -813,9 +578,7 @@ export default function App() {
               {activeConversation.messages.map((msg) => (
                 <MessageBubble key={msg.id} message={msg} />
               ))}
-              {isStreaming && activeConversation.messages[activeConversation.messages.length - 1]?.content === '' && (
-                <TypingIndicator />
-              )}
+              {isLoading && <TypingIndicator />}
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -831,8 +594,9 @@ export default function App() {
                 onKeyDown={handleKeyDown}
                 placeholder="Message Neo AI..."
                 rows={1}
+                disabled={isLoading}
                 className="flex-1 bg-transparent text-white text-sm placeholder:text-white/30 
-                           resize-none outline-none px-3 py-2 max-h-32 min-h-[40px]"
+                           resize-none outline-none px-3 py-2 max-h-32 min-h-[40px] disabled:opacity-50"
                 style={{ height: 'auto', minHeight: '40px' }}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
@@ -840,32 +604,20 @@ export default function App() {
                   target.style.height = Math.min(target.scrollHeight, 128) + 'px';
                 }}
               />
-              {isStreaming ? (
-                <button
-                  onClick={stopGenerating}
-                  className="p-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 transition-all flex-shrink-0"
-                  title="Stop generating"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="2"/>
-                  </svg>
-                </button>
-              ) : (
-                <button
-                  onClick={() => sendMessage()}
-                  disabled={!inputValue.trim()}
-                  className={`p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 ${
-                    inputValue.trim()
-                      ? 'neo-gradient neo-glow text-white hover:opacity-90'
-                      : 'bg-white/5 text-white/20 cursor-not-allowed'
-                  }`}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13"/>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                  </svg>
-                </button>
-              )}
+              <button
+                onClick={() => sendMessage()}
+                disabled={!inputValue.trim() || isLoading}
+                className={`p-2.5 rounded-xl transition-all duration-200 flex-shrink-0 ${
+                  inputValue.trim() && !isLoading
+                    ? 'neo-gradient neo-glow text-white hover:opacity-90'
+                    : 'bg-white/5 text-white/20 cursor-not-allowed'
+                }`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
             </div>
             <p className="text-[10px] text-white/20 text-center mt-2">
               Neo AI — Free & unlimited • No API keys required
