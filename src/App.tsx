@@ -71,12 +71,12 @@ function Sidebar({
         {/* Logo */}
         <div className="p-5 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl neo-gradient flex items-center justify-center neo-glow">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                <path d="M2 17l10 5 10-5"/>
-                <path d="M2 12l10 5 10-5"/>
-              </svg>
+            <div className="w-9 h-9 rounded-xl overflow-hidden neo-glow ring-1 ring-purple-500/30">
+              <img 
+                src="https://cdn.discordapp.com/avatars/1530037654278766653/f6f834053d1f3b86f503519f74b840bd.webp?size=1024" 
+                alt="Neo AI" 
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <h1 className="text-lg font-bold text-white tracking-tight">Neo AI</h1>
@@ -140,12 +140,12 @@ function Sidebar({
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-3 message-appear">
-      <div className="w-8 h-8 rounded-lg neo-gradient flex items-center justify-center flex-shrink-0 neo-glow">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-          <path d="M2 17l10 5 10-5"/>
-          <path d="M2 12l10 5 10-5"/>
-        </svg>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 neo-glow ring-1 ring-purple-500/30 overflow-hidden">
+        <img 
+          src="https://cdn.discordapp.com/avatars/1530037654278766653/f6f834053d1f3b86f503519f74b840bd.webp?size=1024" 
+          alt="Neo AI" 
+          className="w-full h-full object-cover"
+        />
       </div>
       <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex items-center gap-1.5">
@@ -165,19 +165,19 @@ function MessageBubble({ message }: { message: Message }) {
   return (
     <div className={`flex items-start gap-3 message-appear ${isUser ? 'flex-row-reverse' : ''}`}>
       {/* Avatar */}
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${
         isUser 
           ? 'bg-gradient-to-br from-emerald-500 to-teal-600' 
-          : 'neo-gradient neo-glow'
+          : 'neo-glow ring-1 ring-purple-500/30'
       }`}>
         {isUser ? (
           <span className="text-xs font-bold text-white">U</span>
         ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-            <path d="M2 17l10 5 10-5"/>
-            <path d="M2 12l10 5 10-5"/>
-          </svg>
+          <img 
+            src="https://cdn.discordapp.com/avatars/1530037654278766653/f6f834053d1f3b86f503519f74b840bd.webp?size=1024" 
+            alt="Neo AI" 
+            className="w-full h-full object-cover"
+          />
         )}
       </div>
 
@@ -216,12 +216,12 @@ function WelcomeScreen() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 fade-in">
-      <div className="w-16 h-16 rounded-2xl neo-gradient flex items-center justify-center neo-glow pulse-ring mb-6">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-          <path d="M2 17l10 5 10-5"/>
-          <path d="M2 12l10 5 10-5"/>
-        </svg>
+      <div className="w-16 h-16 rounded-2xl overflow-hidden neo-glow pulse-ring mb-6 ring-2 ring-purple-500/40">
+        <img 
+          src="https://cdn.discordapp.com/avatars/1530037654278766653/f6f834053d1f3b86f503519f74b840bd.webp?size=1024" 
+          alt="Neo AI" 
+          className="w-full h-full object-cover"
+        />
       </div>
       <h2 className="text-3xl font-bold text-white mb-2 neo-text-glow">Hello, I'm Neo AI</h2>
       <p className="text-white/40 text-center max-w-md mb-10">
