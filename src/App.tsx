@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface Message {
   id: string;
@@ -14,15 +14,15 @@ interface Conversation {
   createdAt: Date;
 }
 
-const SYSTEM_PROMPT = `You are Neo AI, a highly intelligent, helpful, and friendly AI assistant. You have a sleek, modern personality. You provide clear, accurate, and well-structured responses. You use markdown formatting when helpful (bold, lists, code blocks). You're knowledgeable about virtually any topic and can help with coding, writing, analysis, math, creative tasks, and general questions. Keep responses concise but thorough. When appropriate, use emojis sparingly to add personality.`;
+const SYSTEM_PROMPT = `You are Neo AI, a highly intelligent, helpful, and friendly AI assistant. You provide clear, accurate, and well-structured responses. Use markdown formatting when helpful (bold with **, lists with - or numbers, code with backticks). Be knowledgeable about any topic. Keep responses concise but thorough.`;
 
 const MODELS = [
-  { id: 'gpt-5-mini', name: 'GPT-5 Mini', desc: 'Fast & Smart' },
+  { id: 'gpt-5-nano', name: 'GPT-5 Nano', desc: 'Fast & Efficient' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', desc: 'Balanced' },
-  { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', desc: 'Advanced' },
-  { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Multimodal' },
-  { id: 'deepseek-chat', name: 'DeepSeek V3', desc: 'Reasoning' },
-  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', desc: 'Open Source' },
+  { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', desc: 'Advanced Reasoning' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash', desc: 'Google AI' },
+  { id: 'deepseek-chat', name: 'DeepSeek V3', desc: 'Open Source' },
+  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', desc: 'Meta AI' },
 ];
 
 function generateId(): string {
@@ -33,14 +33,75 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Declare puter on window
 declare global {
   interface Window {
-    puter: {
-      ai: {
-        chat: (messages: any, options?: any) => Promise<any>;
-      };
-    };
+    puter: any;
+  }
+}
+
+// Free AI API call using Pollinations (no key needed)
+async function callPollinationsAI(messages: { role: string; content: string }[], model: string): Promise<string> {
+  const response = await fetch('https://text.pollinations.ai/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: model || 'openai',
+      messages: messages,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';
+}
+
+// Streaming via Pollinations
+async function* streamPollinationsAI(messages: { role: string; content: string }[], model: string): AsyncGenerator<string> {
+  const response = await fetch('https://text.pollinations.ai/openai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: model || 'openai',
+      messages: messages,
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response stream');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') return;
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) yield content;
+        } catch {
+          // skip malformed
+        }
+      }
+    }
   }
 }
 
@@ -231,7 +292,7 @@ function ModelSelector({
 
         <div className="mt-4 px-2">
           <p className="text-[11px] text-white/30 text-center">
-            Powered by Puter.js — Free & unlimited, no API keys needed
+            Free & unlimited — no API keys needed ✨
           </p>
         </div>
       </div>
@@ -261,7 +322,7 @@ function TypingIndicator() {
   );
 }
 
-// Message Component with Markdown-like rendering
+// Message Component
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
 
@@ -313,7 +374,7 @@ function MessageBubble({ message }: { message: Message }) {
           codeLines.push(lines[i]);
           i++;
         }
-        i++; // skip closing ```
+        i++;
         elements.push(
           <div key={elements.length} className="my-3 rounded-xl overflow-hidden border border-white/10">
             {lang && (
@@ -331,24 +392,19 @@ function MessageBubble({ message }: { message: Message }) {
         continue;
       }
       
-      // Headers
       if (line.startsWith('### ')) {
         elements.push(<h3 key={i} className="text-base font-bold text-white mt-3 mb-1">{renderInline(line.slice(4))}</h3>);
-        i++;
-        continue;
+        i++; continue;
       }
       if (line.startsWith('## ')) {
         elements.push(<h2 key={i} className="text-lg font-bold text-white mt-3 mb-1">{renderInline(line.slice(3))}</h2>);
-        i++;
-        continue;
+        i++; continue;
       }
       if (line.startsWith('# ')) {
         elements.push(<h1 key={i} className="text-xl font-bold text-white mt-3 mb-1">{renderInline(line.slice(2))}</h1>);
-        i++;
-        continue;
+        i++; continue;
       }
 
-      // Bullet points
       if (line.match(/^[\s]*[-•*]\s/)) {
         const indent = line.match(/^(\s*)/)?.[1].length || 0;
         const text = line.replace(/^[\s]*[-•*]\s/, '');
@@ -358,11 +414,9 @@ function MessageBubble({ message }: { message: Message }) {
             <span>{renderInline(text)}</span>
           </div>
         );
-        i++;
-        continue;
+        i++; continue;
       }
 
-      // Numbered lists
       if (line.match(/^[\s]*\d+\.\s/)) {
         const num = line.match(/^[\s]*(\d+)\./)?.[1];
         const text = line.replace(/^[\s]*\d+\.\s/, '');
@@ -372,18 +426,14 @@ function MessageBubble({ message }: { message: Message }) {
             <span>{renderInline(text)}</span>
           </div>
         );
-        i++;
-        continue;
+        i++; continue;
       }
 
-      // Empty line
       if (line.trim() === '') {
         elements.push(<br key={i} />);
-        i++;
-        continue;
+        i++; continue;
       }
 
-      // Regular text
       elements.push(<span key={i}>{renderInline(line)}{i < lines.length - 1 && <br />}</span>);
       i++;
     }
@@ -393,7 +443,6 @@ function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className={`flex items-start gap-3 message-appear ${isUser ? 'flex-row-reverse' : ''}`}>
-      {/* Avatar */}
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden ${
         isUser 
           ? 'bg-gradient-to-br from-emerald-500 to-teal-600' 
@@ -410,7 +459,6 @@ function MessageBubble({ message }: { message: Message }) {
         )}
       </div>
 
-      {/* Message Content */}
       <div className={`max-w-[80%] ${isUser ? 'text-right' : ''}`}>
         <div className={`inline-block text-left rounded-2xl px-4 py-3 text-sm leading-relaxed ${
           isUser 
@@ -430,10 +478,10 @@ function MessageBubble({ message }: { message: Message }) {
 // Welcome Screen
 function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string) => void }) {
   const suggestions = [
-    { icon: "💡", text: "Explain quantum computing in simple terms" },
-    { icon: "💻", text: "Write a Python function to find prime numbers" },
-    { icon: "🎨", text: "Help me write a creative short story" },
-    { icon: "🧠", text: "What are the latest advances in AI?" },
+    { icon: "💡", text: "Explain quantum computing simply" },
+    { icon: "💻", text: "Write a Python function to find primes" },
+    { icon: "🎨", text: "Help me write a creative story" },
+    { icon: "🧠", text: "What are the latest AI advances?" },
   ];
 
   return (
@@ -447,7 +495,7 @@ function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string
       </div>
       <h2 className="text-3xl font-bold text-white mb-2 neo-text-glow">Hello, I'm Neo AI</h2>
       <p className="text-white/40 text-center max-w-md mb-8">
-        Your intelligent assistant — free, unlimited, and always ready to help. Ask me anything.
+        Your intelligent assistant — free, unlimited, no API keys. Ask me anything.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
@@ -472,29 +520,13 @@ function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string
 
 // Main App
 export default function App() {
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    const saved = localStorage.getItem('neo-conversations');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return parsed.map((c: Conversation) => ({
-          ...c,
-          createdAt: new Date(c.createdAt),
-          messages: c.messages.map((m: Message) => ({ ...m, timestamp: new Date(m.timestamp) }))
-        }));
-      } catch { return []; }
-    }
-    return [];
-  });
-  
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>(() => 
-    localStorage.getItem('neo-model') || 'gpt-5-mini'
-  );
+  const [selectedModel, setSelectedModel] = useState<string>('openai');
   const [error, setError] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -502,14 +534,6 @@ export default function App() {
   const abortRef = useRef(false);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
-
-  useEffect(() => {
-    localStorage.setItem('neo-conversations', JSON.stringify(conversations));
-  }, [conversations]);
-
-  useEffect(() => {
-    localStorage.setItem('neo-model', selectedModel);
-  }, [selectedModel]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -529,7 +553,7 @@ export default function App() {
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-  const sendMessage = async (overrideText?: string) => {
+  const sendMessage = useCallback(async (overrideText?: string) => {
     const text = overrideText || inputValue;
     if (!text.trim() || isStreaming) return;
 
@@ -554,6 +578,10 @@ export default function App() {
       timestamp: new Date(),
     };
 
+    // Get current messages before update
+    const currentConv = conversations.find(c => c.id === currentConvId);
+    const previousMessages = currentConv?.messages || [];
+
     setConversations(prev => prev.map(conv => {
       if (conv.id === currentConvId) {
         const isFirstMessage = conv.messages.length === 0;
@@ -571,17 +599,14 @@ export default function App() {
     setError(null);
     abortRef.current = false;
 
-    // Build messages for API
-    const currentConv = conversations.find(c => c.id === currentConvId);
-    const previousMessages = currentConv?.messages || [];
-    
+    // Build API messages
     const apiMessages = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...previousMessages.map(m => ({ role: m.role, content: m.content })),
       { role: 'user', content: text.trim() },
     ];
 
-    // Add empty AI message for streaming
+    // Add empty AI message for streaming display
     const aiMessageId = generateId();
     const aiMessage: Message = {
       id: aiMessageId,
@@ -598,18 +623,66 @@ export default function App() {
     }));
 
     try {
-      const response = await window.puter.ai.chat(apiMessages, { 
-        model: selectedModel, 
-        stream: true 
-      });
-
+      // Try Puter.js first, fall back to Pollinations
       let fullContent = '';
+      let usedPuter = false;
 
-      for await (const part of response) {
-        if (abortRef.current) break;
-        
-        if (part?.text) {
-          fullContent += part.text;
+      if (window.puter && window.puter.ai && window.puter.ai.chat) {
+        try {
+          usedPuter = true;
+          const response = await window.puter.ai.chat(apiMessages, { 
+            model: selectedModel, 
+            stream: true 
+          });
+
+          for await (const part of response) {
+            if (abortRef.current) break;
+            if (part?.text) {
+              fullContent += part.text;
+              setConversations(prev => prev.map(conv => {
+                if (conv.id === currentConvId) {
+                  const messages = [...conv.messages];
+                  const lastMsg = messages[messages.length - 1];
+                  if (lastMsg && lastMsg.id === aiMessageId) {
+                    messages[messages.length - 1] = { ...lastMsg, content: fullContent };
+                  }
+                  return { ...conv, messages };
+                }
+                return conv;
+              }));
+            }
+          }
+        } catch (puterErr) {
+          console.warn('Puter.js failed, trying Pollinations...', puterErr);
+          usedPuter = false;
+          fullContent = '';
+        }
+      }
+
+      // Fallback to Pollinations streaming
+      if (!usedPuter || !fullContent) {
+        fullContent = '';
+        try {
+          const stream = streamPollinationsAI(apiMessages, selectedModel);
+          for await (const chunk of stream) {
+            if (abortRef.current) break;
+            fullContent += chunk;
+            setConversations(prev => prev.map(conv => {
+              if (conv.id === currentConvId) {
+                const messages = [...conv.messages];
+                const lastMsg = messages[messages.length - 1];
+                if (lastMsg && lastMsg.id === aiMessageId) {
+                  messages[messages.length - 1] = { ...lastMsg, content: fullContent };
+                }
+                return { ...conv, messages };
+              }
+              return conv;
+            }));
+          }
+        } catch (pollErr) {
+          // Final fallback: non-streaming
+          const response = await callPollinationsAI(apiMessages, selectedModel);
+          fullContent = response;
           setConversations(prev => prev.map(conv => {
             if (conv.id === currentConvId) {
               const messages = [...conv.messages];
@@ -623,6 +696,10 @@ export default function App() {
           }));
         }
       }
+
+      if (!fullContent) {
+        throw new Error('No response received');
+      }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setError(errorMessage);
@@ -631,10 +708,10 @@ export default function App() {
         if (conv.id === currentConvId) {
           const messages = [...conv.messages];
           const lastMsg = messages[messages.length - 1];
-          if (lastMsg && lastMsg.id === aiMessageId && !lastMsg.content) {
+          if (lastMsg && lastMsg.id === aiMessageId) {
             messages[messages.length - 1] = { 
               ...lastMsg, 
-              content: `⚠️ Error: ${errorMessage}` 
+              content: `⚠️ ${errorMessage}` 
             };
           }
           return { ...conv, messages };
@@ -645,7 +722,7 @@ export default function App() {
       setIsStreaming(false);
       abortRef.current = false;
     }
-  };
+  }, [inputValue, isStreaming, activeConversationId, conversations, selectedModel]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -656,11 +733,11 @@ export default function App() {
 
   const stopGenerating = () => {
     abortRef.current = true;
+    setIsStreaming(false);
   };
 
   return (
     <div className="h-full flex bg-black">
-      {/* Sidebar */}
       <Sidebar
         conversations={conversations}
         activeConversation={activeConversationId}
@@ -676,7 +753,6 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
       />
 
-      {/* Model Selector */}
       <ModelSelector
         isOpen={modelSelectorOpen}
         onClose={() => setModelSelectorOpen(false)}
@@ -684,9 +760,7 @@ export default function App() {
         onSelectModel={setSelectedModel}
       />
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col h-full min-w-0">
-        {/* Header */}
         <header className="h-14 border-b border-white/5 flex items-center px-4 gap-3 flex-shrink-0 bg-black/50 backdrop-blur-xl">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -701,9 +775,7 @@ export default function App() {
           
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <span className="text-sm text-white/60">
-              Neo AI • {MODELS.find(m => m.id === selectedModel)?.name || 'GPT-5 Mini'}
-            </span>
+            <span className="text-sm text-white/60">Neo AI • Online</span>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -721,7 +793,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* Error Banner */}
         {error && (
           <div className="mx-4 mt-3 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300/80 text-xs flex items-center gap-2 fade-in">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -734,7 +805,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Messages Area */}
         <div className="flex-1 overflow-y-auto">
           {!activeConversation || activeConversation.messages.length === 0 ? (
             <WelcomeScreen onSuggestionClick={(text) => sendMessage(text)} />
@@ -751,7 +821,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Input Area */}
         <div className="border-t border-white/5 p-4 bg-black/50 backdrop-blur-xl">
           <div className="max-w-3xl mx-auto">
             <div className="relative flex items-end gap-2 bg-[#111] border border-white/10 rounded-2xl p-2 focus-within:border-purple-500/50 transition-colors">
@@ -799,7 +868,7 @@ export default function App() {
               )}
             </div>
             <p className="text-[10px] text-white/20 text-center mt-2">
-              Neo AI — Free & unlimited • Powered by Puter.js
+              Neo AI — Free & unlimited • No API keys required
             </p>
           </div>
         </div>
