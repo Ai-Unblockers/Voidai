@@ -14,9 +14,6 @@ interface Conversation {
   createdAt: Date;
 }
 
-const APP_VERSION = '4.0';
-const BUILD_TIME = new Date().toISOString();
-
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
 }
@@ -25,47 +22,27 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Free AI API - Pollinations.ai (no keys, no signup, 100% free)
 async function callAI(prompt: string): Promise<string> {
-  const timestamp = Date.now();
-  const randomSeed = Math.floor(Math.random() * 999999);
-  
-  // Use POST to avoid any caching
   const response = await fetch('https://text.pollinations.ai/', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messages: [
-        {
-          role: 'system',
-          content: 'You are Neo AI. Be helpful, accurate, and concise. Answer questions directly.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
+        { role: 'system', content: 'You are Neo AI. Be helpful, accurate, and concise.' },
+        { role: 'user', content: prompt }
       ],
-      model: 'openai',
-      seed: randomSeed
+      seed: Math.floor(Math.random() * 999999)
     })
   });
   
-  if (!response.ok) {
-    throw new Error(`AI service error: ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`Error: ${response.status}`);
   
   const text = await response.text();
-  
-  if (!text || text.trim().length < 2) {
-    throw new Error('Empty response from AI');
-  }
+  if (!text || text.trim().length < 2) throw new Error('Empty response');
   
   return text.trim();
 }
 
-// Sidebar
 function Sidebar({ 
   conversations, 
   activeConversation, 
@@ -107,7 +84,7 @@ function Sidebar({
             </div>
             <div>
               <h1 className="text-lg font-bold text-white tracking-tight">Neo AI</h1>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest">v{APP_VERSION}</p>
+              <p className="text-[10px] text-white/40 uppercase tracking-widest">Intelligence Platform</p>
             </div>
           </div>
         </div>
@@ -147,18 +124,11 @@ function Sidebar({
             ))
           )}
         </div>
-
-        <div className="p-4 border-t border-white/5">
-          <div className="text-[10px] text-white/20 text-center">
-            Free • No API Keys • No Signup
-          </div>
-        </div>
       </aside>
     </>
   );
 }
 
-// Typing Indicator
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-3 message-appear">
@@ -170,18 +140,16 @@ function TypingIndicator() {
         />
       </div>
       <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-sm px-4 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 bg-purple-400 rounded-full typing-dot"></div>
           <div className="w-2 h-2 bg-purple-400 rounded-full typing-dot"></div>
           <div className="w-2 h-2 bg-purple-400 rounded-full typing-dot"></div>
-          <span className="text-xs text-white/40 ml-2">Thinking...</span>
         </div>
       </div>
     </div>
   );
 }
 
-// Message
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
 
@@ -219,7 +187,6 @@ function MessageBubble({ message }: { message: Message }) {
   );
 }
 
-// Welcome
 function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string) => void }) {
   const suggestions = [
     { icon: "💡", text: "What is 2+2?" },
@@ -237,12 +204,9 @@ function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string
           className="w-full h-full object-cover"
         />
       </div>
-      <h2 className="text-3xl font-bold text-white mb-2 neo-text-glow">Neo AI v{APP_VERSION}</h2>
-      <p className="text-white/40 text-center max-w-md mb-2">
-        Free AI assistant • No API keys • No signup
-      </p>
-      <p className="text-[10px] text-white/20 text-center mb-8">
-        Build: {BUILD_TIME}
+      <h2 className="text-3xl font-bold text-white mb-2 neo-text-glow">Hello, I'm Neo AI</h2>
+      <p className="text-white/40 text-center max-w-md mb-8">
+        Ask me anything.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
@@ -265,7 +229,6 @@ function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string
   );
 }
 
-// Main App
 export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -279,10 +242,8 @@ export default function App() {
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
-  // Clear all cached data
   useEffect(() => {
     localStorage.clear();
-    sessionStorage.clear();
   }, []);
 
   useEffect(() => {
@@ -345,9 +306,7 @@ export default function App() {
     setError(null);
 
     try {
-      console.log('[Neo AI] Calling AI with:', text);
       const response = await callAI(text.trim());
-      console.log('[Neo AI] Got response:', response);
 
       const aiMessage: Message = {
         id: generateId(),
@@ -363,23 +322,8 @@ export default function App() {
         return conv;
       }));
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to AI';
-      console.error('[Neo AI] Error:', errorMessage);
-      setError(`${errorMessage}. Please try again.`);
-      
-      const errorMsg: Message = {
-        id: generateId(),
-        role: 'assistant',
-        content: `⚠️ Error: ${errorMessage}`,
-        timestamp: new Date(),
-      };
-
-      setConversations(prev => prev.map(conv => {
-        if (conv.id === currentConvId) {
-          return { ...conv, messages: [...conv.messages, errorMsg] };
-        }
-        return conv;
-      }));
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -422,7 +366,7 @@ export default function App() {
           
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <span className="text-sm text-white/60">Neo AI v{APP_VERSION} • Live</span>
+            <span className="text-sm text-white/60">Neo AI</span>
           </div>
         </header>
 
@@ -487,9 +431,6 @@ export default function App() {
                 </svg>
               </button>
             </div>
-            <p className="text-[10px] text-white/20 text-center mt-2">
-              Neo AI v{APP_VERSION} • Free • No API Keys • Build: {BUILD_TIME.slice(0, 19)}
-            </p>
           </div>
         </div>
       </main>
