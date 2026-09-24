@@ -28,7 +28,7 @@ async function callAI(prompt: string): Promise<string> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messages: [
-        { role: 'system', content: 'You are Neo AI. Be helpful, accurate, and concise.' },
+        { role: 'system', content: 'You are Void AI. Be helpful, accurate, and concise.' },
         { role: 'user', content: prompt }
       ],
       seed: Math.floor(Math.random() * 999999)
@@ -77,13 +77,13 @@ function Sidebar({
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden neo-glow ring-1 ring-purple-500/30">
               <img 
-                src="https://cdn.discordapp.com/avatars/1530037654278766653/f6f834053d1f3b86f503519f74b840bd.webp?size=1024" 
-                alt="Neo AI" 
+                src="https://image.qwenlm.ai/generated-images/6470d6ef-9c70-4efb-9a7c-a1f65c3e8f66/_result.png" 
+                alt="Void AI" 
                 className="w-full h-full object-cover"
               />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white tracking-tight">Neo AI</h1>
+              <h1 className="text-lg font-bold text-white tracking-tight">Void AI</h1>
               <p className="text-[10px] text-white/40 uppercase tracking-widest">Intelligence Platform</p>
             </div>
           </div>
@@ -134,8 +134,8 @@ function TypingIndicator() {
     <div className="flex items-start gap-3 message-appear">
       <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 neo-glow ring-1 ring-purple-500/30 overflow-hidden">
         <img 
-          src="https://cdn.discordapp.com/avatars/1530037654278766653/f6f834053d1f3b86f503519f74b840bd.webp?size=1024" 
-          alt="Neo AI" 
+          src="https://image.qwenlm.ai/generated-images/6470d6ef-9c70-4efb-9a7c-a1f65c3e8f66/_result.png" 
+          alt="Void AI" 
           className="w-full h-full object-cover"
         />
       </div>
@@ -164,8 +164,8 @@ function MessageBubble({ message }: { message: Message }) {
           <span className="text-xs font-bold text-white">U</span>
         ) : (
           <img 
-            src="https://cdn.discordapp.com/avatars/1530037654278766653/f6f834053d1f3b86f503519f74b840bd.webp?size=1024" 
-            alt="Neo AI" 
+            src="https://image.qwenlm.ai/generated-images/6470d6ef-9c70-4efb-9a7c-a1f65c3e8f66/_result.png" 
+            alt="Void AI" 
             className="w-full h-full object-cover"
           />
         )}
@@ -199,12 +199,12 @@ function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string
     <div className="flex-1 flex flex-col items-center justify-center px-6 fade-in">
       <div className="w-20 h-20 rounded-2xl overflow-hidden neo-glow pulse-ring mb-6 ring-2 ring-purple-500/40">
         <img 
-          src="https://cdn.discordapp.com/avatars/1530037654278766653/f6f834053d1f3b86f503519f74b840bd.webp?size=1024" 
-          alt="Neo AI" 
+          src="https://image.qwenlm.ai/generated-images/6470d6ef-9c70-4efb-9a7c-a1f65c3e8f66/_result.png" 
+          alt="Void AI" 
           className="w-full h-full object-cover"
         />
       </div>
-      <h2 className="text-3xl font-bold text-white mb-2 neo-text-glow">Hello, I'm Neo AI</h2>
+      <h2 className="text-3xl font-bold text-white mb-2 neo-text-glow">Hello, I'm Void AI</h2>
       <p className="text-white/40 text-center max-w-md mb-8">
         Ask me anything.
       </p>
@@ -366,7 +366,7 @@ export default function App() {
           
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <span className="text-sm text-white/60">Neo AI</span>
+            <span className="text-sm text-white/60">Void AI</span>
           </div>
         </header>
 
@@ -404,7 +404,7 @@ export default function App() {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Message Neo AI..."
+                placeholder="Message Void AI..."
                 rows={1}
                 disabled={isLoading}
                 className="flex-1 bg-transparent text-white text-sm placeholder:text-white/30 
