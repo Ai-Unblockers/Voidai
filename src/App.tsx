@@ -14,12 +14,8 @@ interface Conversation {
   createdAt: Date;
 }
 
-const MODELS = [
-  { id: 'openai', name: 'GPT-4o', desc: 'OpenAI' },
-  { id: 'openai-large', name: 'GPT-4o Large', desc: 'Better Quality' },
-  { id: 'claude', name: 'Claude', desc: 'Anthropic' },
-  { id: 'mistral', name: 'Mistral', desc: 'Fast' },
-];
+const APP_VERSION = '4.0';
+const BUILD_TIME = new Date().toISOString();
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
@@ -29,54 +25,52 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-// Simple AI API call - uses Pollinations POST endpoint (OpenAI-compatible)
-async function getAIResponse(prompt: string, model: string = 'openai'): Promise<string> {
-  const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+// Free AI API - Pollinations.ai (no keys, no signup, 100% free)
+async function callAI(prompt: string): Promise<string> {
+  const timestamp = Date.now();
+  const randomSeed = Math.floor(Math.random() * 999999);
   
+  // Use POST to avoid any caching
   const response = await fetch('https://text.pollinations.ai/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
     },
-    cache: 'no-store',
     body: JSON.stringify({
       messages: [
         {
           role: 'system',
-          content: `You are Neo AI, a helpful assistant. Current time: ${new Date().toISOString()}. Request ID: ${uniqueId}. Answer questions directly and accurately.`
+          content: 'You are Neo AI. Be helpful, accurate, and concise. Answer questions directly.'
         },
         {
           role: 'user',
-          content: `${prompt} [Request: ${uniqueId}]`
+          content: prompt
         }
       ],
-      model: model,
-      seed: Math.floor(Math.random() * 999999)
+      model: 'openai',
+      seed: randomSeed
     })
   });
   
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    throw new Error(`AI service error: ${response.status}`);
   }
   
   const text = await response.text();
   
-  if (!text || text.length < 2) {
-    throw new Error('Empty response received');
+  if (!text || text.trim().length < 2) {
+    throw new Error('Empty response from AI');
   }
   
   return text.trim();
 }
 
-// Sidebar Component
+// Sidebar
 function Sidebar({ 
   conversations, 
   activeConversation, 
   onSelectConversation, 
   onNewChat,
-  onOpenModelSelect,
-  currentModel,
   isOpen,
   onClose 
 }: { 
@@ -84,13 +78,9 @@ function Sidebar({
   activeConversation: string | null;
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
-  onOpenModelSelect: () => void;
-  currentModel: string;
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const currentModelInfo = MODELS.find(m => m.id === currentModel) || MODELS[0];
-  
   return (
     <>
       {isOpen && (
@@ -117,7 +107,7 @@ function Sidebar({
             </div>
             <div>
               <h1 className="text-lg font-bold text-white tracking-tight">Neo AI</h1>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest">Intelligence Platform</p>
+              <p className="text-[10px] text-white/40 uppercase tracking-widest">v{APP_VERSION}</p>
             </div>
           </div>
         </div>
@@ -159,104 +149,12 @@ function Sidebar({
         </div>
 
         <div className="p-4 border-t border-white/5">
-          <button
-            onClick={onOpenModelSelect}
-            className="w-full flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-white/5 transition-colors text-left"
-          >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-indigo-500/20 border border-purple-500/20 flex items-center justify-center">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                <path d="M2 17l10 5 10-5"/>
-                <path d="M2 12l10 5 10-5"/>
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-white/80 truncate">{currentModelInfo.name}</p>
-              <p className="text-[10px] text-white/30">{currentModelInfo.desc}</p>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/30">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
+          <div className="text-[10px] text-white/20 text-center">
+            Free • No API Keys • No Signup
+          </div>
         </div>
       </aside>
     </>
-  );
-}
-
-// Model Selector Modal
-function ModelSelector({ 
-  isOpen, 
-  onClose, 
-  currentModel, 
-  onSelectModel 
-}: { 
-  isOpen: boolean; 
-  onClose: () => void; 
-  currentModel: string;
-  onSelectModel: (model: string) => void;
-}) {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 fade-in">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Select Model</h2>
-          <button 
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/5 text-white/40 hover:text-white transition-colors"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          {MODELS.map((model) => (
-            <button
-              key={model.id}
-              onClick={() => { onSelectModel(model.id); onClose(); }}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left
-                ${currentModel === model.id 
-                  ? 'border-purple-500/40 bg-purple-500/10' 
-                  : 'border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-white/10'
-                }`}
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                currentModel === model.id 
-                  ? 'bg-purple-500/20 border border-purple-500/30' 
-                  : 'bg-white/5 border border-white/10'
-              }`}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={currentModel === model.id ? 'text-purple-400' : 'text-white/40'}>
-                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                  <path d="M2 17l10 5 10-5"/>
-                  <path d="M2 12l10 5 10-5"/>
-                </svg>
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-white">{model.name}</p>
-                <p className="text-xs text-white/40">{model.desc}</p>
-              </div>
-              {currentModel === model.id && (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 px-2">
-          <p className="text-[11px] text-white/30 text-center">
-            Free & unlimited — no API keys needed ✨
-          </p>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -272,40 +170,20 @@ function TypingIndicator() {
         />
       </div>
       <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-sm px-4 py-3">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-purple-400 rounded-full typing-dot"></div>
           <div className="w-2 h-2 bg-purple-400 rounded-full typing-dot"></div>
           <div className="w-2 h-2 bg-purple-400 rounded-full typing-dot"></div>
+          <span className="text-xs text-white/40 ml-2">Thinking...</span>
         </div>
       </div>
     </div>
   );
 }
 
-// Message Component
+// Message
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
-
-  const renderContent = (content: string) => {
-    return content.split('\n').map((line, i) => {
-      // Bold
-      if (line.includes('**')) {
-        const parts = line.split('**');
-        return (
-          <span key={i}>
-            {parts.map((part, j) => j % 2 === 1 ? <strong key={j}>{part}</strong> : part)}
-            {i < content.split('\n').length - 1 && <br />}
-          </span>
-        );
-      }
-      return (
-        <span key={i}>
-          {line}
-          {i < content.split('\n').length - 1 && <br />}
-        </span>
-      );
-    });
-  };
 
   return (
     <div className={`flex items-start gap-3 message-appear ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -326,12 +204,12 @@ function MessageBubble({ message }: { message: Message }) {
       </div>
 
       <div className={`max-w-[80%] ${isUser ? 'text-right' : ''}`}>
-        <div className={`inline-block text-left rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+        <div className={`inline-block text-left rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
           isUser 
             ? 'bg-gradient-to-r from-purple-600/80 to-indigo-600/80 text-white rounded-tr-sm' 
             : 'bg-white/5 border border-white/5 text-white/90 rounded-tl-sm'
         }`}>
-          {renderContent(message.content)}
+          {message.content}
         </div>
         <p className={`text-[10px] text-white/30 mt-1.5 px-1 ${isUser ? 'text-right' : ''}`}>
           {formatTime(message.timestamp)}
@@ -341,12 +219,12 @@ function MessageBubble({ message }: { message: Message }) {
   );
 }
 
-// Welcome Screen
+// Welcome
 function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string) => void }) {
   const suggestions = [
-    { icon: "💡", text: "Explain quantum computing" },
-    { icon: "💻", text: "Write a Python function" },
-    { icon: "🎨", text: "Help me write a story" },
+    { icon: "💡", text: "What is 2+2?" },
+    { icon: "💻", text: "Write hello world in Python" },
+    { icon: "🎨", text: "Tell me a joke" },
     { icon: "🧠", text: "What is AI?" },
   ];
 
@@ -359,9 +237,12 @@ function WelcomeScreen({ onSuggestionClick }: { onSuggestionClick: (text: string
           className="w-full h-full object-cover"
         />
       </div>
-      <h2 className="text-3xl font-bold text-white mb-2 neo-text-glow">Hello, I'm Neo AI</h2>
-      <p className="text-white/40 text-center max-w-md mb-8">
-        Your intelligent assistant — free, unlimited, no API keys. Ask me anything.
+      <h2 className="text-3xl font-bold text-white mb-2 neo-text-glow">Neo AI v{APP_VERSION}</h2>
+      <p className="text-white/40 text-center max-w-md mb-2">
+        Free AI assistant • No API keys • No signup
+      </p>
+      <p className="text-[10px] text-white/20 text-center mb-8">
+        Build: {BUILD_TIME}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
@@ -391,8 +272,6 @@ export default function App() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>('openai');
   const [error, setError] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -400,11 +279,10 @@ export default function App() {
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
-  // Clear old localStorage data on load
+  // Clear all cached data
   useEffect(() => {
-    localStorage.removeItem('neo-conversations');
-    localStorage.removeItem('neo-api-key');
-    localStorage.removeItem('neo-model');
+    localStorage.clear();
+    sessionStorage.clear();
   }, []);
 
   useEffect(() => {
@@ -467,8 +345,9 @@ export default function App() {
     setError(null);
 
     try {
-      // Call AI API
-      const response = await getAIResponse(text.trim(), selectedModel);
+      console.log('[Neo AI] Calling AI with:', text);
+      const response = await callAI(text.trim());
+      console.log('[Neo AI] Got response:', response);
 
       const aiMessage: Message = {
         id: generateId(),
@@ -484,13 +363,14 @@ export default function App() {
         return conv;
       }));
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to get response. Please try again.';
-      setError(errorMessage);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to AI';
+      console.error('[Neo AI] Error:', errorMessage);
+      setError(`${errorMessage}. Please try again.`);
       
       const errorMsg: Message = {
         id: generateId(),
         role: 'assistant',
-        content: `⚠️ ${errorMessage}`,
+        content: `⚠️ Error: ${errorMessage}`,
         timestamp: new Date(),
       };
 
@@ -523,17 +403,8 @@ export default function App() {
           setError(null);
         }}
         onNewChat={createNewChat}
-        onOpenModelSelect={() => setModelSelectorOpen(true)}
-        currentModel={selectedModel}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-      />
-
-      <ModelSelector
-        isOpen={modelSelectorOpen}
-        onClose={() => setModelSelectorOpen(false)}
-        currentModel={selectedModel}
-        onSelectModel={setSelectedModel}
       />
 
       <main className="flex-1 flex flex-col h-full min-w-0">
@@ -551,21 +422,7 @@ export default function App() {
           
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <span className="text-sm text-white/60">Neo AI v3 • Live</span>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => setModelSelectorOpen(true)}
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/80 transition-colors text-xs"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                <path d="M2 17l10 5 10-5"/>
-                <path d="M2 12l10 5 10-5"/>
-              </svg>
-              Change Model
-            </button>
+            <span className="text-sm text-white/60">Neo AI v{APP_VERSION} • Live</span>
           </div>
         </header>
 
@@ -631,7 +488,7 @@ export default function App() {
               </button>
             </div>
             <p className="text-[10px] text-white/20 text-center mt-2">
-              Neo AI v3.0 — Free & unlimited • No API keys required • Build: {Date.now()}
+              Neo AI v{APP_VERSION} • Free • No API Keys • Build: {BUILD_TIME.slice(0, 19)}
             </p>
           </div>
         </div>
